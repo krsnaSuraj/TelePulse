@@ -182,6 +182,7 @@ class ProxyListNotifier extends StateNotifier<AsyncValue<List<ProxyModel>>> {
 
     try {
       final batchSize = parallel ?? ProxyTesterService.maxParallel;
+      final perProxyTimeout = ProxyTesterService.perProxyTimeout;
       final batches = _batch(testProxies, batchSize);
       final testedMap = <String, ProxyModel>{};
       var batchCount = 0;
@@ -190,7 +191,7 @@ class ProxyListNotifier extends StateNotifier<AsyncValue<List<ProxyModel>>> {
         if (_disposed) return;
         final batchResults = await Future.wait(batch.map(
           (p) => _tester.testProxy(p).timeout(
-            const Duration(seconds: 7),
+            perProxyTimeout,
             onTimeout: () => p.copyWith(
               isAlive: false,
               latencyMs: -1,

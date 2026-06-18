@@ -4,9 +4,9 @@ import 'dart:math';
 import '../models/proxy_model.dart';
 
 class ProxyTesterService {
-  static const connectTimeout = Duration(seconds: 2);
-  static const handshakeTimeout = Duration(seconds: 2);
-  static const perProxyTimeout = Duration(seconds: 7);
+  static const connectTimeout = Duration(milliseconds: 1500);
+  static const handshakeTimeout = Duration(seconds: 1);
+  static const perProxyTimeout = Duration(seconds: 4);
   static const maxParallel = 50;
   static const minParallel = 8;
 
@@ -47,8 +47,8 @@ class ProxyTesterService {
           : _buildObfuscationPacket();
       socket.add(packet);
 
-      await socket.first.timeout(handshakeTimeout);
-      return true;
+      final response = await socket.first.timeout(handshakeTimeout);
+      return response.length >= 32;
     } on TimeoutException {
       return false;
     } on StateError {

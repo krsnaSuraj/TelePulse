@@ -45,6 +45,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(proxyListProvider);
     final notifier = ref.read(proxyListProvider.notifier);
 
     return Scaffold(
@@ -162,8 +163,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             iconColor: AppColors.primary,
             name: 'SoliSpirit',
             subtitle: 'Verified primary MTProto proxy list',
-            trailing: Icons.open_in_new_rounded,
-            onTap: () => _openUrl('https://github.com/SoliSpirit/mtproto'),
           ),
           _sourceDivider(),
           _SourceTile(
@@ -653,16 +652,12 @@ class _SourceTile extends StatelessWidget {
   final Color iconColor;
   final String name;
   final String subtitle;
-  final IconData? trailing;
-  final VoidCallback? onTap;
 
   const _SourceTile({
     required this.icon,
     required this.iconColor,
     required this.name,
     required this.subtitle,
-    this.trailing,
-    this.onTap,
   });
 
   @override
@@ -677,12 +672,8 @@ class _SourceTile extends StatelessWidget {
         subtitle,
         style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
       ),
-      trailing: trailing != null
-          ? Icon(trailing, color: AppColors.textMuted, size: 14)
-          : null,
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      onTap: onTap,
     );
   }
 }
