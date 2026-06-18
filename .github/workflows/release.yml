@@ -25,12 +25,19 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build apk --release
+      - run: flutter build apk --release --obfuscate --split-debug-info=debug-info/
 
       - name: Extract version
         shell: bash
         run: |
           echo "VERSION=$(grep '^version: ' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')" >> $GITHUB_ENV
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-info-v${{ env.VERSION }}
+          path: debug-info/
+          retention-days: 7
 
       - name: Rename APK
         run: |
