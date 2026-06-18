@@ -9,6 +9,7 @@ class ProxyModel {
   final bool isAlive;
   final DateTime? lastChecked;
   final bool isFavorite;
+  final int connectionFailures;
   final ProxyProtocolType protocolType;
 
   ProxyModel({
@@ -20,6 +21,7 @@ class ProxyModel {
     this.isAlive = false,
     this.lastChecked,
     this.isFavorite = false,
+    this.connectionFailures = 0,
   }) : protocolType = ProxyModel._detectProtocol(secret);
 
   static ProxyProtocolType _detectProtocol(String secret) {
@@ -39,6 +41,7 @@ class ProxyModel {
     bool? isAlive,
     DateTime? lastChecked,
     bool? isFavorite,
+    int? connectionFailures,
   }) {
     return ProxyModel(
       server: server ?? this.server,
@@ -49,6 +52,7 @@ class ProxyModel {
       isAlive: isAlive ?? this.isAlive,
       lastChecked: lastChecked ?? this.lastChecked,
       isFavorite: isFavorite ?? this.isFavorite,
+      connectionFailures: connectionFailures ?? this.connectionFailures,
     );
   }
 
@@ -72,6 +76,7 @@ class ProxyModel {
         'isAlive': isAlive,
         'lastChecked': lastChecked?.toIso8601String(),
         'isFavorite': isFavorite,
+        'connectionFailures': connectionFailures,
       };
 
   factory ProxyModel.fromJson(Map<String, dynamic> json) => ProxyModel(
@@ -85,6 +90,7 @@ class ProxyModel {
         isAlive: json['isAlive'] as bool? ?? false,
         lastChecked: _safeParseDateTime(json['lastChecked']),
         isFavorite: json['isFavorite'] as bool? ?? false,
+        connectionFailures: json['connectionFailures'] as int? ?? 0,
       );
 
   static DateTime? _safeParseDateTime(dynamic value) {

@@ -4,7 +4,6 @@
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android)](https://flutter.dev)
 ![Flutter](https://img.shields.io/badge/Flutter-3.27+-02569B?logo=flutter)
 [![Telegram](https://img.shields.io/badge/Telegram-MTProto%20Proxy-2AABEE?logo=telegram)](https://telegram.org)
-[![CI](https://github.com/krsnaSuraj/TelePulse/actions/workflows/ci.yml/badge.svg)](https://github.com/krsnaSuraj/TelePulse/actions/workflows/ci.yml)
 
 MTProto proxy discovery engine for Android. Fetches, validates, and ranks Telegram proxies across 5 distributed source groups. Bypasses IP-level network restrictions using local `tg://` intents — no web intermediates, no central server.
 
@@ -14,14 +13,15 @@ Telegram provides proxy *configuration* — you supply a `server:port:secret` an
 
 | Capability | Telegram Built-in | TelePulse |
 |---|---|---|
-| Proxy discovery | Manual entry required | Auto-fetches from 5 source groups |
-| Pre-connection validation | Blind apply | TCP connect + protocol handshake |
-| Ranking | Chronological | Latency, port-443, source trust |
-| Multi-source aggregation | 5 manual slots max | 5 sources + custom URLs |
+| Proxy discovery | Manual entry required | Auto-fetches from 7 source endpoints |
+| Pre-connection validation | Blind apply | TCP connect (2s timeout, no handshake) |
+| Ranking | Chronological | Latency, port-443, source trust, failure feedback |
+| Multi-source aggregation | 5 manual slots max | 7 sources + custom URLs |
 | Favorites persistence | None | SharedPreferences bookmarking |
 | Cache strategy | None | Fresh + stale tiered cache |
 | Network-aware | Manual re-check | Auto re-test on connectivity change |
 | Concurrent testing | Sequential | 50 parallel sockets, throttled state updates |
+| Failure feedback | None | Per-proxy counter penalizes non-working proxies |
 | Link sharing | Manual copy | Long-press clipboard copy |
 
 ## Quick Start
@@ -34,7 +34,7 @@ flutter build apk --debug
 flutter install
 ```
 
-On first launch, the app fetches all sources in parallel, tests every proxy at 50 concurrency, and displays results incrementally as batches complete.
+On first launch, the app fetches all sources in parallel, tests every proxy at 50 concurrency, and displays results incrementally as batches complete. Cached proxies appear immediately; fresh results stream in as tests finish.
 
 ## Proxy Sources
 
@@ -55,14 +55,28 @@ Sources auto-disable after 3 consecutive failures with a 30-minute recovery wind
 | Framework | Flutter 3.27+ / Dart 3.12 | Single codebase, native ARM64 |
 | State | Riverpod 2.6 (StateNotifier) | Zero code-gen, testable, composable |
 | HTTP fetch | Dio 5.7 | Retry, timeout, interceptor support |
-| Proxy test | `dart:io` Socket | Direct TCP; no HTTP overhead, offline-capable |
+| Proxy validation | `dart:io` Socket.connect | TCP only — protocol handshakes cause false positives |
+| Ranking | Custom score function | Latency score + source trust + port bonus + failure penalty |
 | Cache | SharedPreferences | JSON serialization; no SQLite dependency |
-| Deep link | `url_launcher` + `tg://` intent | Direct resolution |
+| Deep link | `url_launcher` + `tg://` intent | Direct resolution with t.me fallback |
 | Monitoring | `connectivity_plus` | Cross-platform offline/online detection |
+
+## Ranking System
+
+Proxies are ranked by a composite score:
+
+- **+100** if TCP-alive with <3 user-reported failures
+- **+10** from trusted sources (SoliSpirit, kort0881, Grim1313)
+- **+15** if FakeTLS (`ee` prefix), **+5** if obfuscated (`dd` prefix)
+- **+8** for port 443 (less likely to be blocked)
+- **−50 per user-reported failure** (tapped but Telegram wouldn't connect)
+- **Latency bonus**: 50ms→50pts, 100ms→40pts, 300ms→25pts, 500ms→10pts
+
+Proxies with ≥3 failures are excluded from "Fastest Proxies" until they re-test as TCP-alive (which resets the counter). This ensures that only proxies the user has actually *used successfully* stay at the top.
 
 ## Auto-Update
 
-Update checks against the **GitHub Releases API** (`/repos/krsnaSuraj/TelePulse/releases/latest`). A Check for Updates tile in Settings triggers the flow:
+Update checks against the **GitHub Releases API** (`/repos/krsnaSuraj/TelePulse/releases/latest`). A "Check for Updates" tile in Settings triggers the flow:
 
 1. Fetch latest release tag from GitHub (10s timeout)
 2. Compare with current version from `PackageInfo`
@@ -70,7 +84,7 @@ Update checks against the **GitHub Releases API** (`/repos/krsnaSuraj/TelePulse/
 4. APK download URL resolved from release assets
 5. Cached for 1 hour; skip-version persistence via SharedPreferences
 
-CI runs `flutter analyze` + `flutter test` on every push (`.github/workflows/ci.yml`). To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`) — the release workflow (`.github/workflows/release.yml`) builds the obfuscated APK, creates a Release, and uploads it automatically. Users see the dialog on next check.
+To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`), then upload the APK to a new GitHub Release manually. Users see the dialog on next check.
 
 ## Performance Budget
 
@@ -78,13 +92,9 @@ CI runs `flutter analyze` + `flutter test` on every push (`.github/workflows/ci.
 |---|---|---|
 | Cache load (tested) | ~50ms | From SharedPreferences |
 | Full fetch | 5-10s | Parallel HTTP requests |
-| Full test (200 proxies) | ~14s | 2s connect + 2s handshake ÷ 50 concurrency |
+| Full test (200 proxies) | ~8s | 2s connect ÷ 50 concurrency |
 | Incremental update | per 3 batches (~6s) | Throttled state merge |
-| App cold start to ready | ~1s | Cache-first rendering |
-
-## Security
-
-Release APKs are built with **Dart obfuscation** (`--obfuscate --split-debug-info`). All class/function names are renamed in the compiled binary, making reverse engineering significantly harder. Source code remains MIT open source on GitHub. Debug symbols (for crash trace deobfuscation) are stored as a separate artifact with 7-day retention in CI builds.
+| App cold start to ready | ~1s | Cache-first rendering on launch |
 
 ## License
 

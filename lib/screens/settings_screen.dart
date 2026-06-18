@@ -365,7 +365,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             dense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          _aboutDivider(),
+          _sourceDivider(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -376,7 +376,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               ],
             ),
           ),
-          _aboutDivider(),
+          _sourceDivider(),
           ListTile(
             leading: const Icon(Icons.code_rounded,
                 color: AppColors.primary, size: 18),
@@ -437,9 +437,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _sourceDivider() =>
-      const Divider(height: 1, indent: 16, endIndent: 16);
-
-  Widget _aboutDivider() =>
       const Divider(height: 1, indent: 16, endIndent: 16);
 
   Future<void> _openUrl(String url) async {

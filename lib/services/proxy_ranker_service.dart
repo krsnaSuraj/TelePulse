@@ -6,6 +6,8 @@ class ProxyRankerService {
   static const _eeSecretScore = 15.0;
   static const _ddSecretScore = 5.0;
   static const _port443Bonus = 8.0;
+  static const _failurePenalty = 50.0;
+  static const _maxFailures = 3;
 
   static const _trustedSources = {'SoliSpirit', 'kort0881-all', 'kort0881-eu', 'kort0881-ru', 'Grim1313'};
 
@@ -19,14 +21,14 @@ class ProxyRankerService {
 
   List<ProxyModel> topProxies(List<ProxyModel> proxies, {int count = 5}) {
     final ranked = rank(proxies);
-    final alive = ranked.where((p) => p.isAlive).toList();
+    final alive = ranked.where((p) => p.isAlive && p.connectionFailures < _maxFailures).toList();
     return alive.take(count).toList();
   }
 
   double _calculateScore(ProxyModel proxy) {
     var score = 0.0;
 
-    if (proxy.isAlive) {
+    if (proxy.isAlive && proxy.connectionFailures < _maxFailures) {
       score += _aliveScore;
       if (proxy.latencyMs > 0) {
         score += _latencyScore(proxy.latencyMs);
@@ -46,6 +48,8 @@ class ProxyRankerService {
     if (proxy.port == 443) {
       score += _port443Bonus;
     }
+
+    score -= proxy.connectionFailures * _failurePenalty;
 
     return score;
   }

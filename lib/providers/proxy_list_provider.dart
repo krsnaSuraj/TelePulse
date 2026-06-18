@@ -100,11 +100,13 @@ class ProxyListNotifier extends StateNotifier<AsyncValue<List<ProxyModel>>> {
     if (cached != null && cached.isNotEmpty) {
       state = AsyncValue.data(cached);
       _loadState = ProxyLoadState.ready;
+      unawaited(testProxies(proxyList: cached));
     } else {
       final stale = await _cache.loadStaleTestedProxies();
       if (stale != null && stale.isNotEmpty) {
         state = AsyncValue.data(stale);
         _loadState = ProxyLoadState.ready;
+        unawaited(testProxies(proxyList: stale));
       }
     }
 
@@ -259,12 +261,28 @@ class ProxyListNotifier extends StateNotifier<AsyncValue<List<ProxyModel>>> {
     try {
       final result = await _tester.testProxy(proxy);
       final current = state.valueOrNull ?? [];
-      final updated = current.map((p) => p == proxy ? result : p).toList();
+      final updated = current.map((p) {
+        if (p == proxy) {
+          return result.copyWith(connectionFailures: p.connectionFailures);
+        }
+        return p;
+      }).toList();
       final ranked = _ranker.rank(updated);
       state = AsyncValue.data(ranked);
     } catch (e) {
       debugPrint('testSingleProxy failed: $e');
     }
+  }
+
+  Future<void> didTapProxy(ProxyModel proxy) async {
+    final current = state.valueOrNull ?? [];
+    final newFailures = (proxy.connectionFailures + 1).clamp(0, 10);
+    final updated = current.map((p) {
+      if (p == proxy) return p.copyWith(connectionFailures: newFailures);
+      return p;
+    }).toList();
+    state = AsyncValue.data(updated);
+    await _cache.saveTestedProxies(updated);
   }
 
   Future<DeepLinkResult> connectToProxy(ProxyModel proxy) async {

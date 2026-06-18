@@ -162,6 +162,8 @@ class _ProxyTileState extends ConsumerState<ProxyTile> {
     final notifier = ref.read(proxyListProvider.notifier);
     AppHaptics.light();
 
+    await notifier.didTapProxy(widget.proxy);
+
     setState(() => _isConnecting = true);
     await notifier.testSingleProxy(widget.proxy);
     if (!mounted) return;
