@@ -81,6 +81,10 @@ To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`). 
 | Incremental update | per 3 batches (~6s) | Throttled state merge |
 | App cold start to ready | ~1s | Cache-first rendering |
 
+## Security
+
+Release APKs are built with **Dart obfuscation** (`--obfuscate --split-debug-info`). All class/function names are renamed in the compiled binary, making reverse engineering significantly harder. Source code remains MIT open source on GitHub. Debug symbols (for crash trace deobfuscation) are stored as a separate artifact with 7-day retention in CI builds.
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
