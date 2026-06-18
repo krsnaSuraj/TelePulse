@@ -69,7 +69,7 @@ Update checks against the **GitHub Releases API** (`/repos/krsnaSuraj/TelePulse/
 4. APK download URL resolved from release assets
 5. Cached for 1 hour; skip-version persistence via SharedPreferences
 
-To publish an update: create a GitHub Release with a semver tag (`v1.0.1`) and attach a non-debug `.apk` asset. Users see the dialog on next check.
+To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`). GitHub Actions builds the APK, creates a Release, and uploads it automatically. Users see the dialog on next check.
 
 ## Performance Budget
 
