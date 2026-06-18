@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android)](https://flutter.dev)
-[![Flutter](https://img.shields.io/badge/Flutter-3.12+-02569B?logo=flutter)](https://flutter.dev)
+![Flutter](https://img.shields.io/badge/Flutter-3.12+-02569B?logo=flutter)
 [![Telegram](https://img.shields.io/badge/Telegram-MTProto%20Proxy-2AABEE?logo=telegram)](https://telegram.org)
 
 MTProto proxy discovery engine for Android. Fetches, validates, and ranks Telegram proxies across 5 distributed source groups. Bypasses IP-level network restrictions using local `tg://` intents — no web intermediates, no central server.

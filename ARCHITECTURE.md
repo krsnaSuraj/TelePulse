@@ -34,6 +34,7 @@ TelePulse is a **discovery engine** that feeds Telegram's configuration sink. It
 │  │                          │  - custom URL   │               │     │
 │  │                          │  - sources list │               │     │
 │  │                          │  - stats/about  │               │     │
+│  │                          │  - update check │               │     │
 │  │                          └────────┬────────┘               │     │
 │  └──────────────────────────────────┼─────────────────────────┘     │
 │                                     │                               │
@@ -46,6 +47,7 @@ TelePulse is a **discovery engine** that feeds Telegram's configuration sink. It
 │  │  │  loadState: ProxyLoadState (enum FSM)               │    │    │
 │  │  │  Guards: _isFetching, _isTesting, _disposed         │    │    │
 │  │  │  Counters: _totalProxies, _testedCount              │    │    │
+│  │  │  Computed: aliveCount, avgLatency, alivePercent     │    │    │
 │  │  │                                                      │    │    │
 │  │  │  +init()                                            │    │    │
 │  │  │  +refreshProxies()                                  │    │    │
@@ -63,9 +65,9 @@ TelePulse is a **discovery engine** that feeds Telegram's configuration sink. It
 │  │  ┌─────────────────────┐      ┌──────────────────────────┐  │    │
 │  │  │  ProxyFetcherService│      │  ProxyTesterService      │  │    │
 │  │  │  - Dio HTTP client  │      │  - dart:io Socket        │  │    │
-│  │  │  - 7 prim. + 2 fb  │      │  - TCP connect 2s t/o    │  │    │
-│  │  │  - retry(3) + t/o  │      │  - TLS Client Hello      │  │    │
-│  │  │  - deduplication   │      │  - 50 concurrent         │  │    │
+│  │  │  - 5 source groups  │      │  - TCP connect 2s t/o    │  │    │
+│  │  │  - retry(3) + t/o   │      │  - Client Hello/obfs pkt │  │    │
+│  │  │  - dedup O(n)       │      │  - 50 concurrent         │  │    │
 │  │  └────────┬────────────┘      └──────────┬───────────────┘  │    │
 │  │           │                              │                   │    │
 │  │  ┌────────▼────────────┐      ┌──────────▼───────────────┐  │    │
@@ -83,6 +85,14 @@ TelePulse is a **discovery engine** that feeds Telegram's configuration sink. It
 │  │  │  - clipboard copy   │      │  - auto re-test         │  │    │
 │  │  │  - web fallback     │      │                          │  │    │
 │  │  └─────────────────────┘      └──────────────────────────┘  │    │
+│  │                                                              │    │
+│  │  ┌──────────────────────────────────────────────────────┐    │    │
+│  │  │              UpdateService                           │    │    │
+│  │  │  - GitHub Releases API lookup                       │    │    │
+│  │  │  - Semver comparison                                │    │    │
+│  │  │  - 1h cache + skip-version persistence              │    │    │
+│  │  │  - APK download URL resolution                      │    │    │
+│  │  └──────────────────────────────────────────────────────┘    │    │
 │  └──────────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -106,36 +116,29 @@ sequenceDiagram
     alt fresh cache (TTL valid)
         Cache-->>N: cached tested list
     else stale cache (TTL expired)
-        Cache-->>N: null
         N->>Cache: loadStaleTestedProxies()
         Cache-->>N: stale data (ignores TTL)
     end
     N->>UI: AsyncValue.data(cached)
-    Note over UI: User sees proxies in <100ms
     
-    N->>Cache: loadFetchedProxies()
-    alt fresh fetched cache
-        Cache-->>N: cached fetched list
-        N->>N: skip HTTP fetch
-    else expired or absent
-        N->>UI: AsyncValue.loading() (shimmer)
-        N->>Fetcher: fetchFromAllSources()
-        alt success
-            Fetcher-->>N: 1367 proxies
-            N->>Cache: saveFetchedProxies()
-        else all sources failed
-            Fetcher-->>N: empty list
-            N->>Cache: loadStaleTestedProxies()
-            Cache-->>N: fallback stale data
-        end
+    N->>Fetcher: refreshProxies()
+    alt fetch success
+        Fetcher-->>N: parsed proxy list
+        N->>N: deduplicate, rank
+        N->>Cache: saveFetchedProxies()
+        N->>UI: AsyncValue.data() with fresh list
+    else all sources failed
+        N->>Cache: loadStaleTestedProxies()
+        Cache-->>N: fallback stale data
     end
     
     N->>Tester: testProxies(fullList)
     loop Batches of 50
         Tester-->>N: tested batch
-        N->>UI: merge(current, batch)
+        N->>N: merge batch into state (every 3 batches)
         N->>Cache: saveTestedProxies()
     end
+    N->>UI: final ranked list
 ```
 
 ### Proxy Test Lifecycle
@@ -152,16 +155,14 @@ flowchart TD
     TCP -->|SocketException| Dead[isAlive=false]
     TCP -->|Timeout 2s| Dead
     
-    RecordLat --> IsTLS{secret starts with ee?}
-    IsTLS -->|yes| TLS[send Client Hello<br/>wait 1s for response]
-    IsTLS -->|no| Alive[isAlive=true]
+    RecordLat --> SendPkt[Send Client Hello / obfs 64-byte]
+    SendPkt --> Wait[Wait for any response 2s]
     
-    TLS -->|data.isNotEmpty| Alive
-    TLS -->|empty/timer/error| Alive
-    Note over TLS,Alive: TLS fail ≠ proxy dead<br/>MTProto may still work
+    Wait -->|data received| Alive[isAlive=true]
+    Wait -->|timeout/empty| Dead
     
-    Dead --> Return[return ProxyModel]
-    Alive --> Return
+    Alive --> Return[return ProxyModel]
+    Dead --> Return
 ```
 
 ### Deep Link Resolution Chain
@@ -203,8 +204,8 @@ flowchart LR
 
     Transitions:
       initial  ──► loading     (refreshProxies)
-      loading  ──► ready       (fetch + test complete)
-      loading  ──► error       (all 7 sources failed)
+      loading  ──► ready       (fetch complete)
+      loading  ──► error       (all sources failed)
       loading  ──► noProxies   (0 proxies fetched)
       ready    ──► testing     (testProxies called)
       ready    ──► noInternet  (connectivity loss)
@@ -232,8 +233,7 @@ flowchart LR
 │    protocolType: ProxyProtocolType    │
 │      ├── plain                        │
 │      ├── fakeTls (secret starts ee)   │
-│      ├── ddPadding (secret starts dd) │
-│      └── unknown                      │
+│      └── ddPadding (secret starts dd) │
 ├──────────────────────────────────────┤
 │  Computed:                           │
 │    isFakeTls: bool                    │
@@ -256,27 +256,27 @@ flowchart LR
 enum ProxyLoadState {
   initial,      // app launched, nothing loaded
   loading,      // fetching from network sources
+  testing,      // batch validation in progress
   ready,        // proxies available in state
-  error,        // all 7 sources failed
+  error,        // all sources failed
   noInternet,   // device is offline
   noProxies,    // 0 proxies from all sources
-  testing,      // batch validation in progress
 }
 ```
 
 ## Source Architecture
 
 ```
-ProxyFetcherService.fetchFromAllSources()
+ProxySourceProvider.getActiveSources()
 │
-├── Primary (parallel Dio GET, 10s connect / 15s receive)
-│   ├── SoliSpirit          weight=5
-│   ├── kort0881-all        weight=5
-│   ├── kort0881-eu         weight=4
-│   ├── kort0881-ru         weight=4
-│   ├── Grim1313            weight=5
-│   ├── iwh3n               weight=3
-│   └── ALIILAPRO           weight=3
+├── 5 source groups (parallel Dio GET, 10s connect / 15s receive)
+│   ├── SoliSpirit          weight=5  (primary)
+│   ├── kort0881-all        weight=5  (primary, all regions)
+│   ├── kort0881-eu         weight=4  (primary, EU only)
+│   ├── kort0881-ru         weight=4  (primary, RU only)
+│   ├── Grim1313            weight=5  (primary, community fork)
+│   ├── iwh3n               weight=3  (secondary)
+│   └── ALIILAPRO           weight=3  (secondary)
 │
 ├── Fallback (if primary < 50 proxies)
 │   ├── SoliSpirit-mirror   weight=2  (CDN)
@@ -301,6 +301,8 @@ Source health provider: auto-disables after 3 failures, recovers after 30 minute
 | 2s connect timeout | Median MTProto proxy responds in 400-800ms; 2s captures ~95% of legit proxies |
 | 1h fetched / 24h tested TTL | Sources update frequently; tested results are valid longer |
 | Stale cache fallback | If TTL expired but no network, show stale data rather than blank |
+| Throttled state updates (every 3 batches) | Reduces widget rebuild churn from 50 per full test to ~3 |
+| Any response = alive | No crypto stack for proper MTProto obfuscation validation; matches open-source standard |
 
 ## File Tree
 
@@ -311,32 +313,33 @@ lib/
 ├── models/
 │   └── proxy_model.dart             # ProxyModel + protocol detection + JSON
 ├── data/
-│   └── proxy_sources.dart           # 9 source definitions (7 primary + 2 fallback)
+│   └── proxy_sources.dart           # 7 source definitions + 2 fallback
 ├── services/
 │   ├── proxy_fetcher_service.dart   # HTTP fetch via Dio + 4 parser strategies
-│   ├── proxy_tester_service.dart    # Socket.connect + TLS handshake + batching
+│   ├── proxy_tester_service.dart    # Socket.connect + client hello + batching
 │   ├── proxy_ranker_service.dart    # Score-based sorting + top-N selection
 │   ├── proxy_cache_service.dart     # SharedPreferences 2-layer cache with TTL
 │   ├── proxy_source_provider.dart   # Per-source health tracking + auto-disable
 │   ├── connectivity_service.dart    # connectivity_plus edge-triggered wrapper
-│   └── deep_link_service.dart       # tg:// → t.me → web → clipboard chain
+│   ├── deep_link_service.dart       # tg:// → t.me → web → clipboard chain
+│   └── update_service.dart          # GitHub API update check + caching
 ├── providers/
 │   └── proxy_list_provider.dart     # Central StateNotifier + FSM + merge logic
 ├── screens/
-│   ├── home_screen.dart             # Dashboard: status orb, SCANNING badge, top 5
-│   ├── proxy_list_screen.dart       # Full list: testing progress, popup menu
+│   ├── home_screen.dart             # Dashboard: status orb, top 5, fade animations
+│   ├── proxy_list_screen.dart       # Full list: testing progress bar, re-test button
 │   ├── favorites_screen.dart        # Bookmarks: empty state, pull-to-retest
-│   └── settings_screen.dart         # Custom URL, sources table, stats, about
+│   └── settings_screen.dart         # Custom URL, sources table, stats, about, updates
 ├── widgets/
-│   ├── proxy_tile.dart              # Card: tap → tg://, long-press → clipboard
-│   ├── animated_status_orb.dart     # CustomPainter: dash-ring + pulse + glow
-│   ├── status_badge.dart            # Color-coded latency badge
+│   ├── proxy_tile.dart              # Card: tap → connect, long-press → clipboard
+│   ├── animated_status_orb.dart     # CustomPainter: dash-ring + scan arc + pulsar
+│   ├── status_badge.dart            # Color-coded latency badge (alive/warn/dead)
 │   ├── glass_card.dart              # Semi-transparent surface container
-│   └── proxy_shimmer.dart           # Shimmer loading skeleton
+│   └── proxy_shimmer.dart           # Shimmer loading skeleton with tile placeholders
 ├── theme/
-│   └── app_theme.dart               # Dark M3 color scheme + terminalGreen
+│   └── app_theme.dart               # Dark M3 color scheme + terminal green + custom cards
 └── utils/
-    └── haptic_utils.dart            # HapticFeedback patterns
+    └── haptic_utils.dart            # HapticFeedback patterns (light, selection, success, error)
 ```
 
 ## Performance Budget
@@ -346,7 +349,7 @@ lib/
 | Cache load (tested) | <100ms | ~50ms |
 | Cache load (fetched) | <200ms | ~80ms |
 | Full fetch (7 sources) | <15s | 5-10s |
-| Full test (1367 proxies) | <60s | ~55s |
-| Incremental UI update | <50ms | ~20ms |
+| Full test (~200 proxies) | <30s | ~16s (2+2 ÷ 50) |
+| Incremental UI update | every 3 batches | ~6s per update |
 | Cold start → proxy visible | <3s | ~1.5s |
 | Warm start → cached proxy | <0.5s | ~100ms |
