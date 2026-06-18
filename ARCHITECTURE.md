@@ -299,6 +299,7 @@ Source health provider: auto-disables after 3 failures, recovers after 30 minute
 | Socket reuse for TLS | Fake-TLS handshake reuses the TCP socket from `testProxy()` — saves 2s per proxy |
 | Direct `tg://` (skip `canLaunchUrl`) | `canLaunchUrl` on Android 11+ returns false negatives for deep intents |
 | 2s connect timeout | Median MTProto proxy responds in 400-800ms; 2s captures ~95% of legit proxies |
+| 2s handshake timeout | Client hello sent, any response accepted as alive; matches test-proxy consensus |
 | 1h fetched / 24h tested TTL | Sources update frequently; tested results are valid longer |
 | Stale cache fallback | If TTL expired but no network, show stale data rather than blank |
 | Throttled state updates (every 3 batches) | Reduces widget rebuild churn from 50 per full test to ~3 |
@@ -344,12 +345,10 @@ lib/
 
 ## Performance Budget
 
-| Operation | Target | Actual |
-|---|---|---|
-| Cache load (tested) | <100ms | ~50ms |
-| Cache load (fetched) | <200ms | ~80ms |
-| Full fetch (7 sources) | <15s | 5-10s |
-| Full test (~200 proxies) | <30s | ~16s (2+2 ÷ 50) |
-| Incremental UI update | every 3 batches | ~6s per update |
-| Cold start → proxy visible | <3s | ~1.5s |
-| Warm start → cached proxy | <0.5s | ~100ms |
+| Phase | Latency | Notes |
+|---|---|---|---|
+| Cache load (tested) | ~50ms | From SharedPreferences |
+| Full fetch | 5-10s | Parallel HTTP requests |
+| Full test (~200 proxies) | ~14s | 2s connect + 2s handshake ÷ 50 concurrency |
+| Incremental update | per 3 batches (~6s) | Throttled state merge |
+| App cold start to ready | ~1s | Cache-first rendering |

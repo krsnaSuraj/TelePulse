@@ -4,7 +4,7 @@
 [![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android)](https://flutter.dev)
 ![Flutter](https://img.shields.io/badge/Flutter-3.27+-02569B?logo=flutter)
 [![Telegram](https://img.shields.io/badge/Telegram-MTProto%20Proxy-2AABEE?logo=telegram)](https://telegram.org)
-[![Build](https://github.com/krsnaSuraj/TelePulse/actions/workflows/release.yml/badge.svg)](https://github.com/krsnaSuraj/TelePulse/actions/workflows/release.yml)
+[![CI](https://github.com/krsnaSuraj/TelePulse/actions/workflows/ci.yml/badge.svg)](https://github.com/krsnaSuraj/TelePulse/actions/workflows/ci.yml)
 
 MTProto proxy discovery engine for Android. Fetches, validates, and ranks Telegram proxies across 5 distributed source groups. Bypasses IP-level network restrictions using local `tg://` intents — no web intermediates, no central server.
 
@@ -52,9 +52,9 @@ Sources auto-disable after 3 consecutive failures with a 30-minute recovery wind
 
 | Component | Choice | Rationale |
 |---|---|---|
-| Framework | Flutter 3.12+ / Dart 3.12 | Single codebase, native ARM64 |
+| Framework | Flutter 3.27+ / Dart 3.12 | Single codebase, native ARM64 |
 | State | Riverpod 2.6 (StateNotifier) | Zero code-gen, testable, composable |
-| HTTP fetch | Dio 5.9 | Retry, timeout, interceptor support |
+| HTTP fetch | Dio 5.7 | Retry, timeout, interceptor support |
 | Proxy test | `dart:io` Socket | Direct TCP; no HTTP overhead, offline-capable |
 | Cache | SharedPreferences | JSON serialization; no SQLite dependency |
 | Deep link | `url_launcher` + `tg://` intent | Direct resolution |
@@ -70,7 +70,7 @@ Update checks against the **GitHub Releases API** (`/repos/krsnaSuraj/TelePulse/
 4. APK download URL resolved from release assets
 5. Cached for 1 hour; skip-version persistence via SharedPreferences
 
-To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`). GitHub Actions builds the APK, creates a Release, and uploads it automatically. Users see the dialog on next check.
+CI runs `flutter analyze` + `flutter test` on every push (`.github/workflows/ci.yml`). To publish an update: push a version tag (`git tag v1.0.1 && git push --tags`) — the release workflow (`.github/workflows/release.yml`) builds the obfuscated APK, creates a Release, and uploads it automatically. Users see the dialog on next check.
 
 ## Performance Budget
 
