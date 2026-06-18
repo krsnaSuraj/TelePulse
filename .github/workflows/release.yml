@@ -28,26 +28,39 @@ jobs:
       - run: flutter build apk --release --obfuscate --split-debug-info=debug-info/
 
       - name: Extract version
+        id: version
         shell: bash
         run: |
-          echo "VERSION=$(grep '^version: ' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')" >> $GITHUB_ENV
+          VER=$(grep '^version: ' pubspec.yaml | sed 's/version: //' | sed 's/+.*//')
+          echo "VERSION=$VER" >> $GITHUB_ENV
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          APK=$(find build -name "*.apk" -type f | head -1)
+          echo "APK_PATH=$APK" >> $GITHUB_ENV
+          echo "path=$APK" >> $GITHUB_OUTPUT
+          echo "Found APK at: $APK"
 
       - name: Upload debug symbols
         uses: actions/upload-artifact@v4
         with:
-          name: debug-info-v${{ env.VERSION }}
+          name: debug-info-v${{ steps.version.outputs.version }}
           path: debug-info/
           retention-days: 7
 
       - name: Rename APK
+        shell: bash
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk \
-            TelePulse-v${{ env.VERSION }}-release.apk
+          mkdir -p release-artifacts
+          cp "${{ env.APK_PATH }}" "release-artifacts/TelePulse-v${{ steps.version.outputs.version }}-release.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: TelePulse-v${{ env.VERSION }}
-          path: TelePulse-v${{ env.VERSION }}-release.apk
+          name: TelePulse-v${{ steps.version.outputs.version }}
+          path: release-artifacts/TelePulse-v${{ steps.version.outputs.version }}-release.apk
 
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -58,5 +71,5 @@ jobs:
             ## TelePulse ${{ github.ref_name }}
 
             Download the APK below to install.
-          files: TelePulse-v${{ env.VERSION }}-release.apk
+          files: release-artifacts/TelePulse-v${{ steps.version.outputs.version }}-release.apk
           generate_release_notes: true

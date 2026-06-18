@@ -147,8 +147,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildSourcesSection() {
-    return Container(
-      decoration: _cardDecoration(),
+    return Material(
+      type: MaterialType.card,
+      color: AppColors.surfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.surfaceBorder, width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           _SourceTile(
@@ -292,8 +298,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildUpdateSection() {
-    return Container(
-      decoration: _cardDecoration(),
+    return Material(
+      type: MaterialType.card,
+      color: AppColors.surfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.surfaceBorder, width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           ListTile(
@@ -327,8 +339,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Widget _buildAboutSection() {
-    return Container(
-      decoration: _cardDecoration(),
+    return Material(
+      type: MaterialType.card,
+      color: AppColors.surfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.surfaceBorder, width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           ListTile(
