@@ -47,9 +47,17 @@ android {
 
     buildTypes {
         release {
+            // Fail-closed only when CI actually assembles a *release* artifact
+            // without a keystore. (GitHub sets CI=true on every job, so a
+            // plain env check would also break debug/contributor builds at
+            // configuration time — hence the task-name guard.)
+            val ciReleaseBuild = System.getenv("CI") == "true" &&
+                gradle.startParameter.taskNames.any {
+                    it.contains("Release", ignoreCase = true)
+                }
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
-            } else if (System.getenv("CI") == "true") {
+            } else if (ciReleaseBuild) {
                 throw GradleException("FATAL: key.properties missing — refusing debug-signed release")
             } else {
                 logger.warn(
